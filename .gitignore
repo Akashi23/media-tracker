@@ -110,6 +110,9 @@ out
 .nuxt
 dist
 
+# SvelteKit build output
+.svelte-kit/
+
 # Gatsby files
 .cache/
 public
