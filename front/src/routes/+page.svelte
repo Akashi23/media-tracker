@@ -6,10 +6,13 @@
 	import { storage } from "$utils/storage";
 	import EntryCard from "$components/EntryCard.svelte";
 	import AddEntryDialog from "$components/AddEntryDialog.svelte";
+	import EditEntryDialog from "$components/EditEntryDialog.svelte";
 	import StatusTabs from "$components/StatusTabs.svelte";
-	import type { Status } from "$types";
+	import type { Status, Entry } from "$types";
 
 	let showAddDialog = false;
+	let showEditDialog = false;
+	let selectedEntry: Entry | null = null;
 	let selectedStatus: Status | "all" = "all";
 	let loading = false;
 
@@ -45,6 +48,11 @@
 			}
 			entries.setEntries(selectedEntries);
 		}
+	}
+
+	function handleEditEntry(entry: Entry) {
+		selectedEntry = entry;
+		showEditDialog = true;
 	}
 
 	function handleDeleteEntry(id: string) {
@@ -118,6 +126,7 @@
 			{#each $entries.entries as entry (entry.id)}
 				<EntryCard
 					{entry}
+					on:edit={(e) => handleEditEntry(e.detail)}
 					on:delete={(e) => handleDeleteEntry(e.detail)}
 				/>
 			{/each}
@@ -130,6 +139,18 @@
 		bind:open={showAddDialog}
 		on:entry-added={() => {
 			showAddDialog = false;
+			loadEntries();
+		}}
+	/>
+{/if}
+
+{#if showEditDialog}
+	<EditEntryDialog
+		bind:open={showEditDialog}
+		entry={selectedEntry}
+		on:entry-updated={() => {
+			showEditDialog = false;
+			selectedEntry = null;
 			loadEntries();
 		}}
 	/>
