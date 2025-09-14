@@ -5,11 +5,14 @@ A modern SvelteKit frontend for the Media Tracker application. Built with Svelte
 ## Features
 
 - **Modern UI**: Clean, responsive design with Tailwind CSS
-- **Guest Mode**: Use without registration, data stored locally
+- **Guest Mode**: Use without registration, data stored locally with export/import
 - **Authentication**: Email-based login with JWT tokens
-- **Real-time Search**: Search media items as you type
+- **Real-time Search**: Search media items as you type with filtering
 - **Status Management**: Track progress with visual status indicators
 - **Markdown Reviews**: Write rich reviews with Markdown support
+- **Collections**: Create and manage custom collections
+- **Public Sharing**: Share collections via public links
+- **Data Sync**: Automatic synchronization between guest and account modes
 - **Responsive Design**: Works on desktop, tablet, and mobile
 - **TypeScript**: Full type safety throughout the application
 
@@ -60,10 +63,15 @@ front/
 │   │   │   ├── Header.svelte
 │   │   │   ├── EntryCard.svelte
 │   │   │   ├── AddEntryDialog.svelte
+│   │   │   ├── EditEntryDialog.svelte
+│   │   │   ├── CollectionCard.svelte
+│   │   │   ├── CollectionDialog.svelte
+│   │   │   ├── SyncButton.svelte
 │   │   │   └── StatusTabs.svelte
 │   │   ├── stores/          # Svelte stores
 │   │   │   ├── auth.ts      # Authentication state
-│   │   │   └── entries.ts   # Entries state
+│   │   │   ├── entries.ts   # Entries state
+│   │   │   └── collections.ts # Collections state
 │   │   ├── types/           # TypeScript types
 │   │   │   └── index.ts     # Shared types
 │   │   └── utils/           # Utility functions
@@ -71,7 +79,11 @@ front/
 │   │       └── storage.ts   # Local storage utilities
 │   └── routes/              # SvelteKit routes
 │       ├── +layout.svelte   # Root layout
-│       └── +page.svelte     # Dashboard page
+│       ├── +page.svelte     # Dashboard page
+│       ├── collections/     # Collections page
+│       ├── genres/          # Genres page
+│       ├── profile/         # Profile page
+│       └── s/[token]/       # Public share page
 ├── static/                  # Static assets
 ├── package.json
 ├── svelte.config.js
@@ -90,6 +102,18 @@ Displays individual media entries with status, rating, and review preview.
 
 ### AddEntryDialog.svelte
 Modal for adding new entries with media search and type selection.
+
+### EditEntryDialog.svelte
+Modal for editing existing entries with full form controls.
+
+### CollectionCard.svelte
+Displays collection information with entry count and sharing options.
+
+### CollectionDialog.svelte
+Modal for creating and editing collections.
+
+### SyncButton.svelte
+Button for synchronizing data between guest and account modes.
 
 ### StatusTabs.svelte
 Filter tabs for different entry statuses (planned, in progress, completed, etc.).
@@ -125,6 +149,19 @@ const plannedEntries = entries.getByStatus('planned');
 entries.addEntry(newEntry);
 ```
 
+### Collections Store
+Manages collections with CRUD operations and sharing.
+
+```typescript
+import { collections } from '$stores/collections';
+
+// Get all collections
+const allCollections = collections.getAll();
+
+// Create new collection
+collections.createCollection(newCollection);
+```
+
 ## API Integration
 
 The frontend communicates with the Go backend through the API client in `src/lib/utils/api.ts`.
@@ -140,8 +177,18 @@ The frontend communicates with the Go backend through the API client in `src/lib
 ### Entries
 - `GET /api/entries` - List user entries
 - `POST /api/entries` - Create entry
+- `GET /api/entries/:id` - Get entry
 - `PATCH /api/entries/:id` - Update entry
 - `DELETE /api/entries/:id` - Delete entry
+- `POST /api/entries/sync` - Sync entries
+
+### Collections
+- `GET /api/collections` - List collections
+- `POST /api/collections` - Create collection
+- `GET /api/collections/:id` - Get collection
+- `PATCH /api/collections/:id` - Update collection
+- `DELETE /api/collections/:id` - Delete collection
+- `POST /api/collections/:id/share` - Create share link
 
 ## Guest Mode
 

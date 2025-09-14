@@ -12,9 +12,9 @@
     "format": "prettier --write ."
   },
   "devDependencies": {
-    "@sveltejs/adapter-auto": "^3.0.0",
-    "@sveltejs/kit": "^2.0.0",
-    "@sveltejs/vite-plugin-svelte": "^3.0.0",
+    "@sveltejs/adapter-auto": "^3.3.1",
+    "@sveltejs/kit": "^2.39.1",
+    "@sveltejs/vite-plugin-svelte": "^3.1.2",
     "@typescript-eslint/eslint-plugin": "^6.0.0",
     "@typescript-eslint/parser": "^6.0.0",
     "autoprefixer": "^10.4.14",
@@ -30,7 +30,7 @@
     "tailwindcss": "^3.3.2",
     "tslib": "^2.4.1",
     "typescript": "^5.9.2",
-    "vite": "^5.0.3"
+    "vite": "^5.4.20"
   },
   "dependencies": {
     "@types/uuid": "^9.0.0",
