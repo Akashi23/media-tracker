@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 
 	"media-tracker/internal/models"
@@ -76,6 +77,28 @@ func (h *MediaHandler) Create(c *gin.Context) {
 	c.JSON(http.StatusCreated, media)
 }
 
+func (h *MediaHandler) Update(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "id parameter required"})
+		return
+	}
+
+	var req models.UpdateMediaRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	media, err := h.mediaService.Update(c.Request.Context(), id, &req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, media)
+}
+
 func (h *MediaHandler) Search(c *gin.Context) {
 	query := c.Query("q")
 	if query == "" {
@@ -101,15 +124,16 @@ func (h *MediaHandler) Search(c *gin.Context) {
 // EntryHandler
 type EntryHandler struct {
 	entryService *services.EntryService
+	mediaService *services.MediaService
 }
 
-func NewEntryHandler(entryService *services.EntryService) *EntryHandler {
-	return &EntryHandler{entryService: entryService}
+func NewEntryHandler(entryService *services.EntryService, mediaService *services.MediaService) *EntryHandler {
+	return &EntryHandler{entryService: entryService, mediaService: mediaService}
 }
 
 func (h *EntryHandler) List(c *gin.Context) {
 	userID, _ := c.Get("user_id")
-	
+
 	var status *models.Status
 	if statusStr := c.Query("status"); statusStr != "" {
 		s := models.Status(statusStr)
@@ -133,7 +157,7 @@ func (h *EntryHandler) List(c *gin.Context) {
 
 func (h *EntryHandler) Create(c *gin.Context) {
 	userID, _ := c.Get("user_id")
-	
+
 	var req models.CreateEntryRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -202,6 +226,101 @@ func (h *EntryHandler) Delete(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Entry deleted successfully"})
 }
 
+func (h *EntryHandler) Sync(c *gin.Context) {
+	userID, _ := c.Get("user_id")
+
+	var req struct {
+		Entries []models.SyncEntryRequest `json:"entries" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Process each entry for sync
+	var syncedEntries []models.Entry
+	var errors []string
+
+	for _, syncEntry := range req.Entries {
+		// First, ensure media exists
+		var mediaID uuid.UUID
+
+		// Check if media already exists by title and type
+		existingMedia, err := h.mediaService.Search(c.Request.Context(), syncEntry.Media.Title, &syncEntry.Media.Type)
+		if err != nil || len(existingMedia) == 0 {
+			// Create new media
+			media, err := h.mediaService.Create(c.Request.Context(), &syncEntry.Media)
+			if err != nil {
+				errors = append(errors, fmt.Sprintf("Error creating media %s: %v", syncEntry.Media.Title, err))
+				continue
+			}
+			mediaID = media.ID
+		} else {
+			// Use existing media
+			mediaID = existingMedia[0].ID
+		}
+
+		// Now create the entry
+		entryReq := models.CreateEntryRequest{
+			MediaID:    mediaID,
+			Status:     syncEntry.Status,
+			Rating:     syncEntry.Rating,
+			ReviewMD:   syncEntry.ReviewMD,
+			Progress:   syncEntry.Progress,
+			StartedAt:  syncEntry.StartedAt,
+			FinishedAt: syncEntry.FinishedAt,
+		}
+
+		// Check if entry already exists for this user and media
+		existingEntries, err := h.entryService.ListByUserAndMedia(c.Request.Context(), userID.(uuid.UUID), mediaID)
+		if err != nil {
+			// Log the error but continue processing
+			errors = append(errors, fmt.Sprintf("Error checking existing entries for media %s: %v", syncEntry.Media.Title, err))
+
+			// Try to create new entry
+			entry, createErr := h.entryService.Create(c.Request.Context(), userID.(uuid.UUID), &entryReq)
+			if createErr != nil {
+				errors = append(errors, fmt.Sprintf("Error creating entry for media %s: %v", syncEntry.Media.Title, createErr))
+				continue
+			}
+			syncedEntries = append(syncedEntries, *entry)
+			continue
+		}
+
+		if len(existingEntries) > 0 {
+			// Update existing entry
+			existingEntry := existingEntries[0]
+			entry, err := h.entryService.Update(c.Request.Context(), existingEntry.ID, &entryReq)
+			if err != nil {
+				errors = append(errors, fmt.Sprintf("Error updating entry %s: %v", existingEntry.ID, err))
+				continue
+			}
+			syncedEntries = append(syncedEntries, *entry)
+		} else {
+			// Create new entry
+			entry, err := h.entryService.Create(c.Request.Context(), userID.(uuid.UUID), &entryReq)
+			if err != nil {
+				errors = append(errors, fmt.Sprintf("Error creating entry for media %s: %v", syncEntry.Media.Title, err))
+				continue
+			}
+			syncedEntries = append(syncedEntries, *entry)
+		}
+	}
+
+	response := gin.H{
+		"message": "Entries synced successfully",
+		"entries": syncedEntries,
+		"count":   len(syncedEntries),
+	}
+
+	if len(errors) > 0 {
+		response["errors"] = errors
+		response["message"] = fmt.Sprintf("Synced %d entries with %d errors", len(syncedEntries), len(errors))
+	}
+
+	c.JSON(http.StatusOK, response)
+}
+
 // CollectionHandler
 type CollectionHandler struct {
 	collectionService *services.CollectionService
@@ -213,13 +332,20 @@ func NewCollectionHandler(collectionService *services.CollectionService, shareSe
 }
 
 func (h *CollectionHandler) List(c *gin.Context) {
-	// Simple implementation - return empty list for now
-	c.JSON(http.StatusOK, []models.Collection{})
+	userID, _ := c.Get("user_id")
+
+	collections, err := h.collectionService.List(c.Request.Context(), userID.(uuid.UUID))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, collections)
 }
 
 func (h *CollectionHandler) Create(c *gin.Context) {
 	userID, _ := c.Get("user_id")
-	
+
 	var req models.CreateCollectionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -252,12 +378,46 @@ func (h *CollectionHandler) Get(c *gin.Context) {
 }
 
 func (h *CollectionHandler) Update(c *gin.Context) {
-	// Simple implementation
-	c.JSON(http.StatusOK, gin.H{"message": "Collection updated"})
+	userID, _ := c.Get("user_id")
+	idStr := c.Param("id")
+
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid collection ID"})
+		return
+	}
+
+	var req models.CreateCollectionRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	collection, err := h.collectionService.Update(c.Request.Context(), id, userID.(uuid.UUID), &req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, collection)
 }
 
 func (h *CollectionHandler) Delete(c *gin.Context) {
-	// Simple implementation
+	userID, _ := c.Get("user_id")
+	idStr := c.Param("id")
+
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid collection ID"})
+		return
+	}
+
+	err = h.collectionService.Delete(c.Request.Context(), id, userID.(uuid.UUID))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{"message": "Collection deleted"})
 }
 
@@ -329,7 +489,7 @@ func (h *GuestHandler) CreateSnapshot(c *gin.Context) {
 
 func (h *GuestHandler) MergeToAccount(c *gin.Context) {
 	userID, _ := c.Get("user_id")
-	
+
 	var req models.MergeRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})

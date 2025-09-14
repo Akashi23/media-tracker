@@ -100,4 +100,5 @@ export interface MergeRequest {
 export interface GuestData {
 	guestId: string;
 	entries: Entry[];
+	collections: Collection[];
 }

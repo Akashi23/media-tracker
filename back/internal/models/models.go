@@ -23,11 +23,11 @@ const (
 type Status string
 
 const (
-	StatusPlanned     Status = "planned"
-	StatusInProgress  Status = "in_progress"
-	StatusCompleted   Status = "completed"
-	StatusOnHold      Status = "on_hold"
-	StatusDropped     Status = "dropped"
+	StatusPlanned    Status = "planned"
+	StatusInProgress Status = "in_progress"
+	StatusCompleted  Status = "completed"
+	StatusOnHold     Status = "on_hold"
+	StatusDropped    Status = "dropped"
 )
 
 type User struct {
@@ -38,31 +38,31 @@ type User struct {
 }
 
 type MediaItem struct {
-	ID            uuid.UUID  `json:"id" db:"id"`
-	Type          MediaType  `json:"type" db:"type"`
-	Title         string     `json:"title" db:"title"`
-	OriginalTitle *string    `json:"original_title,omitempty" db:"original_title"`
-	Year          *int       `json:"year,omitempty" db:"year"`
-	CoverURL      *string    `json:"cover_url,omitempty" db:"cover_url"`
-	Creators      JSONB      `json:"creators,omitempty" db:"creators"`
-	Genres        []string   `json:"genres,omitempty" db:"genres"`
-	Duration      *int       `json:"duration,omitempty" db:"duration"`
-	Metadata      JSONB      `json:"metadata,omitempty" db:"metadata"`
-	CreatedAt     time.Time  `json:"created_at" db:"created_at"`
+	ID            uuid.UUID `json:"id" db:"id"`
+	Type          MediaType `json:"type" db:"type"`
+	Title         string    `json:"title" db:"title"`
+	OriginalTitle *string   `json:"original_title,omitempty" db:"original_title"`
+	Year          *int      `json:"year,omitempty" db:"year"`
+	CoverURL      *string   `json:"cover_url,omitempty" db:"cover_url"`
+	Creators      JSONB     `json:"creators,omitempty" db:"creators"`
+	Genres        []string  `json:"genres,omitempty" db:"genres"`
+	Duration      *int      `json:"duration,omitempty" db:"duration"`
+	Metadata      JSONB     `json:"metadata,omitempty" db:"metadata"`
+	CreatedAt     time.Time `json:"created_at" db:"created_at"`
 }
 
 type Entry struct {
-	ID        uuid.UUID  `json:"id" db:"id"`
-	UserID    uuid.UUID  `json:"user_id" db:"user_id"`
-	MediaID   uuid.UUID  `json:"media_id" db:"media_id"`
-	Status    Status     `json:"status" db:"status"`
-	Rating    *float64   `json:"rating,omitempty" db:"rating"`
-	ReviewMD  *string    `json:"review_md,omitempty" db:"review_md"`
-	Progress  JSONB      `json:"progress,omitempty" db:"progress"`
-	StartedAt *time.Time `json:"started_at,omitempty" db:"started_at"`
+	ID         uuid.UUID  `json:"id" db:"id"`
+	UserID     uuid.UUID  `json:"user_id" db:"user_id"`
+	MediaID    uuid.UUID  `json:"media_id" db:"media_id"`
+	Status     Status     `json:"status" db:"status"`
+	Rating     *float64   `json:"rating,omitempty" db:"rating"`
+	ReviewMD   *string    `json:"review_md,omitempty" db:"review_md"`
+	Progress   JSONB      `json:"progress,omitempty" db:"progress"`
+	StartedAt  *time.Time `json:"started_at,omitempty" db:"started_at"`
 	FinishedAt *time.Time `json:"finished_at,omitempty" db:"finished_at"`
-	UpdatedAt time.Time  `json:"updated_at" db:"updated_at"`
-	Media     *MediaItem `json:"media,omitempty"`
+	UpdatedAt  time.Time  `json:"updated_at" db:"updated_at"`
+	Media      *MediaItem `json:"media,omitempty"`
 }
 
 type Collection struct {
@@ -97,7 +97,7 @@ func (j *JSONB) Scan(value interface{}) error {
 		*j = nil
 		return nil
 	}
-	
+
 	var bytes []byte
 	switch v := value.(type) {
 	case []byte:
@@ -107,7 +107,7 @@ func (j *JSONB) Scan(value interface{}) error {
 	default:
 		return errors.New("cannot scan non-string value into JSONB")
 	}
-	
+
 	return json.Unmarshal(bytes, j)
 }
 
@@ -117,12 +117,12 @@ type LoginRequest struct {
 }
 
 type CreateEntryRequest struct {
-	MediaID   uuid.UUID  `json:"media_id" binding:"required"`
-	Status    Status     `json:"status" binding:"required"`
-	Rating    *float64   `json:"rating,omitempty"`
-	ReviewMD  *string    `json:"review_md,omitempty"`
-	Progress  JSONB      `json:"progress,omitempty"`
-	StartedAt *time.Time `json:"started_at,omitempty"`
+	MediaID    uuid.UUID  `json:"media_id" binding:"required"`
+	Status     Status     `json:"status" binding:"required"`
+	Rating     *float64   `json:"rating,omitempty"`
+	ReviewMD   *string    `json:"review_md,omitempty"`
+	Progress   JSONB      `json:"progress,omitempty"`
+	StartedAt  *time.Time `json:"started_at,omitempty"`
 	FinishedAt *time.Time `json:"finished_at,omitempty"`
 }
 
@@ -138,14 +138,36 @@ type CreateMediaRequest struct {
 	Metadata      JSONB     `json:"metadata,omitempty"`
 }
 
+type UpdateMediaRequest struct {
+	Type          *MediaType `json:"type,omitempty"`
+	Title         *string    `json:"title,omitempty"`
+	OriginalTitle *string    `json:"original_title,omitempty"`
+	Year          *int       `json:"year,omitempty"`
+	CoverURL      *string    `json:"cover_url,omitempty"`
+	Creators      JSONB      `json:"creators,omitempty"`
+	Genres        []string   `json:"genres,omitempty"`
+	Duration      *int       `json:"duration,omitempty"`
+	Metadata      JSONB      `json:"metadata,omitempty"`
+}
+
 type CreateCollectionRequest struct {
-	Title    string     `json:"title" binding:"required"`
-	IsPublic bool       `json:"is_public"`
-	EntryIDs []uuid.UUID `json:"entry_ids,omitempty"`
+	Title    string   `json:"title" binding:"required"`
+	IsPublic bool     `json:"is_public"`
+	EntryIDs []string `json:"entry_ids,omitempty"`
+}
+
+type SyncEntryRequest struct {
+	Media      CreateMediaRequest `json:"media" binding:"required"`
+	Status     Status             `json:"status" binding:"required"`
+	Rating     *float64           `json:"rating,omitempty"`
+	ReviewMD   *string            `json:"review_md,omitempty"`
+	Progress   JSONB              `json:"progress,omitempty"`
+	StartedAt  *time.Time         `json:"started_at,omitempty"`
+	FinishedAt *time.Time         `json:"finished_at,omitempty"`
 }
 
 type GuestSnapshotRequest struct {
-	Entries []Entry `json:"entries" binding:"required"`
+	Entries []Entry     `json:"entries" binding:"required"`
 	Media   []MediaItem `json:"media" binding:"required"`
 }
 

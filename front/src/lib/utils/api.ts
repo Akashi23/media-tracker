@@ -1,10 +1,10 @@
-import type { 
-	User, 
-	Entry, 
-	MediaItem, 
-	Collection, 
-	LoginRequest, 
-	CreateEntryRequest, 
+import type {
+	User,
+	Entry,
+	MediaItem,
+	Collection,
+	LoginRequest,
+	CreateEntryRequest,
 	CreateMediaRequest,
 	CreateCollectionRequest,
 	GuestSnapshotRequest,
@@ -21,7 +21,7 @@ class ApiError extends Error {
 }
 
 async function request<T>(
-	endpoint: string, 
+	endpoint: string,
 	options: RequestInit = {}
 ): Promise<T> {
 	const url = `${API_BASE}${endpoint}`;
@@ -34,7 +34,7 @@ async function request<T>(
 	};
 
 	const response = await fetch(url, config);
-	
+
 	if (!response.ok) {
 		const error = await response.json().catch(() => ({ error: 'Unknown error' }));
 		throw new ApiError(error.error || 'Request failed', response.status);
@@ -45,19 +45,19 @@ async function request<T>(
 
 // Auth API
 export const authApi = {
-	login: (data: LoginRequest) => 
+	login: (data: LoginRequest) =>
 		request<{ token: string }>('/auth/login', {
 			method: 'POST',
 			body: JSON.stringify(data)
 		}),
-	
-	logout: (token: string) => 
+
+	logout: (token: string) =>
 		request('/auth/logout', {
 			method: 'POST',
 			headers: { Authorization: `Bearer ${token}` }
 		}),
-	
-	getProfile: (token: string) => 
+
+	getProfile: (token: string) =>
 		request<User>('/auth/me', {
 			headers: { Authorization: `Bearer ${token}` }
 		})
@@ -65,14 +65,21 @@ export const authApi = {
 
 // Media API
 export const mediaApi = {
-	create: (data: CreateMediaRequest, token: string) => 
+	create: (data: CreateMediaRequest, token: string) =>
 		request<MediaItem>('/media', {
 			method: 'POST',
 			body: JSON.stringify(data),
 			headers: { Authorization: `Bearer ${token}` }
 		}),
-	
-	search: (query: string, type?: string) => 
+
+	update: (id: string, data: Partial<CreateMediaRequest>, token: string) =>
+		request<MediaItem>(`/media/${id}`, {
+			method: 'PUT',
+			body: JSON.stringify(data),
+			headers: { Authorization: `Bearer ${token}` }
+		}),
+
+	search: (query: string, type?: string) =>
 		request<MediaItem[]>(`/media/search?q=${encodeURIComponent(query)}${type ? `&type=${type}` : ''}`)
 };
 
@@ -82,71 +89,78 @@ export const entriesApi = {
 		const searchParams = new URLSearchParams();
 		if (params?.type) searchParams.append('type', params.type);
 		if (params?.status) searchParams.append('status', params.status);
-		
+
 		return request<Entry[]>(`/entries?${searchParams.toString()}`, {
 			headers: { Authorization: `Bearer ${token}` }
 		});
 	},
-	
-	create: (data: CreateEntryRequest, token: string) => 
+
+	create: (data: CreateEntryRequest, token: string) =>
 		request<Entry>('/entries', {
 			method: 'POST',
 			body: JSON.stringify(data),
 			headers: { Authorization: `Bearer ${token}` }
 		}),
-	
-	get: (id: string, token: string) => 
+
+	get: (id: string, token: string) =>
 		request<Entry>(`/entries/${id}`, {
 			headers: { Authorization: `Bearer ${token}` }
 		}),
-	
-	update: (id: string, data: CreateEntryRequest, token: string) => 
+
+	update: (id: string, data: CreateEntryRequest, token: string) =>
 		request<Entry>(`/entries/${id}`, {
 			method: 'PATCH',
 			body: JSON.stringify(data),
 			headers: { Authorization: `Bearer ${token}` }
 		}),
-	
-	delete: (id: string, token: string) => 
+
+	delete: (id: string, token: string) =>
 		request(`/entries/${id}`, {
 			method: 'DELETE',
+			headers: { Authorization: `Bearer ${token}` }
+		}),
+
+	sync: (entries: any[], token: string) =>
+		request<{ entries: Entry[]; count: number; message: string; errors?: string[] }>('/entries/sync', {
+			method: 'POST',
+			body: JSON.stringify({ entries }),
 			headers: { Authorization: `Bearer ${token}` }
 		})
 };
 
 // Collections API
 export const collectionsApi = {
-	list: (token: string) => 
+	list: (token: string) =>
 		request<Collection[]>('/collections', {
 			headers: { Authorization: `Bearer ${token}` }
 		}),
-	
-	create: (data: CreateCollectionRequest, token: string) => 
+
+	create: (data: CreateCollectionRequest, token: string) =>
 		request<Collection>('/collections', {
 			method: 'POST',
 			body: JSON.stringify(data),
 			headers: { Authorization: `Bearer ${token}` }
 		}),
-	
-	get: (id: string, token: string) => 
+
+	get: (id: string, token: string) =>
 		request<Collection>(`/collections/${id}`, {
 			headers: { Authorization: `Bearer ${token}` }
 		}),
-	
-	update: (id: string, data: Partial<CreateCollectionRequest>, token: string) => 
+
+	update: (id: string, data: Partial<CreateCollectionRequest>, token: string) =>
 		request<Collection>(`/collections/${id}`, {
 			method: 'PATCH',
 			body: JSON.stringify(data),
 			headers: { Authorization: `Bearer ${token}` }
 		}),
-	
-	delete: (id: string, token: string) => 
+
+	delete: (id: string, token: string) =>
 		request(`/collections/${id}`, {
 			method: 'DELETE',
 			headers: { Authorization: `Bearer ${token}` }
 		}),
-	
-	createShare: (id: string, token: string) => 
+
+	createShare: (id: string, token: string) =>
 		request<{ share_url: string }>(`/collections/${id}/share`, {
 			method: 'POST',
 			headers: { Authorization: `Bearer ${token}` }
@@ -155,13 +169,13 @@ export const collectionsApi = {
 
 // Guest API
 export const guestApi = {
-	createSnapshot: (data: GuestSnapshotRequest) => 
+	createSnapshot: (data: GuestSnapshotRequest) =>
 		request<{ share_url: string }>('/guest/snapshot', {
 			method: 'POST',
 			body: JSON.stringify(data)
 		}),
-	
-	merge: (data: MergeRequest, token: string) => 
+
+	merge: (data: MergeRequest, token: string) =>
 		request('/guest/merge', {
 			method: 'POST',
 			body: JSON.stringify(data),
@@ -171,6 +185,6 @@ export const guestApi = {
 
 // Public API
 export const publicApi = {
-	getShare: (token: string) => 
+	getShare: (token: string) =>
 		request<any>(`/s/${token}`)
 };

@@ -1,7 +1,7 @@
 <script lang="ts">
     import { createEventDispatcher } from "svelte";
     import { auth } from "$stores/auth";
-    import { entriesApi } from "$utils/api";
+    import { entriesApi, mediaApi } from "$utils/api";
     import { storage } from "$utils/storage";
     import type { Entry, Status, CreateEntryRequest } from "$types";
 
@@ -17,6 +17,8 @@
     let startedAt = "";
     let finishedAt = "";
     let progress: Record<string, any> = {};
+    let genres: string[] = [];
+    let genreInput = "";
     let loading = false;
 
     // Progress fields based on media type
@@ -45,6 +47,7 @@
         startedAt = entry.started_at ? entry.started_at.split("T")[0] : "";
         finishedAt = entry.finished_at ? entry.finished_at.split("T")[0] : "";
         progress = entry.progress || {};
+        genres = entry.media?.genres || [];
 
         // Initialize progress fields based on media type
         if (entry.media?.type === "book") {
@@ -89,6 +92,25 @@
         }
     }
 
+    function addGenre() {
+        const genre = genreInput.trim();
+        if (genre && !genres.includes(genre)) {
+            genres = [...genres, genre];
+            genreInput = "";
+        }
+    }
+
+    function removeGenre(genreToRemove: string) {
+        genres = genres.filter((genre) => genre !== genreToRemove);
+    }
+
+    function handleGenreKeydown(event: KeyboardEvent) {
+        if (event.key === "Enter") {
+            event.preventDefault();
+            addGenre();
+        }
+    }
+
     async function handleSubmit() {
         if (!entry) return;
 
@@ -112,6 +134,19 @@
             };
 
             if ($auth.isAuthenticated && $auth.token) {
+                // Update media genres if they changed
+                if (
+                    entry.media &&
+                    JSON.stringify(entry.media.genres) !==
+                        JSON.stringify(genres)
+                ) {
+                    await mediaApi.update(
+                        entry.media.id,
+                        { genres },
+                        $auth.token
+                    );
+                }
+
                 const updatedEntry = await entriesApi.update(
                     entry.id,
                     entryData,
@@ -125,6 +160,21 @@
                     ...entryData,
                     updated_at: new Date().toISOString(),
                 };
+
+                // Update media genres in local storage
+                if (
+                    entry.media &&
+                    JSON.stringify(entry.media.genres) !==
+                        JSON.stringify(genres)
+                ) {
+                    const updatedMedia = {
+                        ...entry.media,
+                        genres: genres,
+                    };
+                    storage.updateMedia(entry.media.id, updatedMedia);
+                    updatedEntry.media = updatedMedia;
+                }
+
                 storage.updateEntry(entry.id, entryData);
                 dispatch("entry-updated", updatedEntry);
             }
@@ -371,6 +421,53 @@
                         rows="4"
                         placeholder="Write your review in Markdown..."
                     />
+                </div>
+
+                <!-- Genres -->
+                <div>
+                    <label
+                        for="genres"
+                        class="block text-sm font-medium text-gray-700 mb-1"
+                    >
+                        Genres (optional)
+                    </label>
+                    <div class="space-y-2">
+                        <div class="flex space-x-2">
+                            <input
+                                id="genres"
+                                type="text"
+                                bind:value={genreInput}
+                                on:keydown={handleGenreKeydown}
+                                class="input flex-1"
+                                placeholder="Enter genre and press Enter..."
+                            />
+                            <button
+                                type="button"
+                                on:click={addGenre}
+                                class="btn btn-secondary px-3"
+                            >
+                                Add
+                            </button>
+                        </div>
+                        {#if genres.length > 0}
+                            <div class="flex flex-wrap gap-2">
+                                {#each genres as genre}
+                                    <span
+                                        class="inline-flex items-center px-2 py-1 bg-blue-100 text-blue-800 text-sm rounded-full"
+                                    >
+                                        {genre}
+                                        <button
+                                            type="button"
+                                            on:click={() => removeGenre(genre)}
+                                            class="ml-1 text-blue-600 hover:text-blue-800"
+                                        >
+                                            ×
+                                        </button>
+                                    </span>
+                                {/each}
+                            </div>
+                        {/if}
+                    </div>
                 </div>
 
                 <!-- Actions -->

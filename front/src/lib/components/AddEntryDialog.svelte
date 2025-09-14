@@ -21,6 +21,8 @@
 	let rating: number | undefined;
 	let reviewMd = "";
 	let year: number | undefined;
+	let genres: string[] = [];
+	let genreInput = "";
 	let loading = false;
 	let searchResults: any[] = [];
 	let showSearchResults = false;
@@ -58,8 +60,28 @@
 	async function selectMedia(media: any) {
 		title = media.title;
 		year = media.year;
+		genres = media.genres || [];
 		showSearchResults = false;
 		searchResults = [];
+	}
+
+	function addGenre() {
+		const genre = genreInput.trim();
+		if (genre && !genres.includes(genre)) {
+			genres = [...genres, genre];
+			genreInput = "";
+		}
+	}
+
+	function removeGenre(genreToRemove: string) {
+		genres = genres.filter((genre) => genre !== genreToRemove);
+	}
+
+	function handleGenreKeydown(event: KeyboardEvent) {
+		if (event.key === "Enter") {
+			event.preventDefault();
+			addGenre();
+		}
 	}
 
 	async function handleSubmit() {
@@ -74,7 +96,7 @@
 				type: mediaType,
 				title,
 				year,
-				genres: [],
+				genres: genres,
 			};
 
 			// Check if media exists, if not create it
@@ -129,6 +151,8 @@
 			rating = undefined;
 			reviewMd = "";
 			year = undefined;
+			genres = [];
+			genreInput = "";
 			open = false;
 		} catch (error) {
 			console.error("Failed to create entry:", error);
@@ -144,6 +168,8 @@
 		rating = undefined;
 		reviewMd = "";
 		year = undefined;
+		genres = [];
+		genreInput = "";
 		showSearchResults = false;
 		searchResults = [];
 	}
@@ -308,6 +334,53 @@
 						rows="4"
 						placeholder="Write your review in Markdown..."
 					/>
+				</div>
+
+				<!-- Genres -->
+				<div>
+					<label
+						for="genres"
+						class="block text-sm font-medium text-gray-700 mb-1"
+					>
+						Genres (optional)
+					</label>
+					<div class="space-y-2">
+						<div class="flex space-x-2">
+							<input
+								id="genres"
+								type="text"
+								bind:value={genreInput}
+								on:keydown={handleGenreKeydown}
+								class="input flex-1"
+								placeholder="Enter genre and press Enter..."
+							/>
+							<button
+								type="button"
+								on:click={addGenre}
+								class="btn btn-secondary px-3"
+							>
+								Add
+							</button>
+						</div>
+						{#if genres.length > 0}
+							<div class="flex flex-wrap gap-2">
+								{#each genres as genre}
+									<span
+										class="inline-flex items-center px-2 py-1 bg-blue-100 text-blue-800 text-sm rounded-full"
+									>
+										{genre}
+										<button
+											type="button"
+											on:click={() => removeGenre(genre)}
+											class="ml-1 text-blue-600 hover:text-blue-800"
+										>
+											×
+										</button>
+									</span>
+								{/each}
+							</div>
+						{/if}
+					</div>
 				</div>
 
 				<!-- Actions -->
