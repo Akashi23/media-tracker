@@ -73,7 +73,7 @@ func main() {
 	// Initialize handlers
 	authHandler := handlers.NewAuthHandler(authService)
 	mediaHandler := handlers.NewMediaHandler(mediaService)
-	entryHandler := handlers.NewEntryHandler(entryService)
+	entryHandler := handlers.NewEntryHandler(entryService, mediaService)
 	collectionHandler := handlers.NewCollectionHandler(collectionService, shareService)
 	shareHandler := handlers.NewShareHandler(shareService)
 	guestHandler := handlers.NewGuestHandler(guestService)
@@ -104,6 +104,7 @@ func main() {
 		media := api.Group("/media")
 		{
 			media.POST("", middleware.Auth(cfg.JWT), mediaHandler.Create)
+			media.PUT("/:id", middleware.Auth(cfg.JWT), mediaHandler.Update)
 			media.GET("/search", mediaHandler.Search)
 		}
 
@@ -115,6 +116,7 @@ func main() {
 			entries.GET("/:id", middleware.Auth(cfg.JWT), entryHandler.Get)
 			entries.PATCH("/:id", middleware.Auth(cfg.JWT), entryHandler.Update)
 			entries.DELETE("/:id", middleware.Auth(cfg.JWT), entryHandler.Delete)
+			entries.POST("/sync", middleware.Auth(cfg.JWT), entryHandler.Sync)
 		}
 
 		// Collection routes
@@ -134,9 +136,12 @@ func main() {
 			guest.POST("/snapshot", guestHandler.CreateSnapshot)
 			guest.POST("/merge", middleware.Auth(cfg.JWT), guestHandler.MergeToAccount)
 		}
+
+		// Public share routes
+		api.GET("/s/:token", shareHandler.GetPublicShare)
 	}
 
-	// Public share routes
+	// Public share routes (also available without /api prefix for direct access)
 	router.GET("/s/:token", shareHandler.GetPublicShare)
 
 	// Setup server

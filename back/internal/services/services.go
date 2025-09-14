@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"media-tracker/internal/config"
 	"media-tracker/internal/models"
 	"media-tracker/internal/repository"
@@ -18,8 +19,8 @@ import (
 
 // AuthService
 type AuthService struct {
-	userRepo *repository.UserRepository
-	redis    *redis.Client
+	userRepo  *repository.UserRepository
+	redis     *redis.Client
 	jwtConfig config.JWTConfig
 }
 
@@ -95,6 +96,50 @@ func (s *MediaService) Create(ctx context.Context, req *models.CreateMediaReques
 	return media, nil
 }
 
+func (s *MediaService) Update(ctx context.Context, id string, req *models.UpdateMediaRequest) (*models.MediaItem, error) {
+	mediaID, err := uuid.Parse(id)
+	if err != nil {
+		return nil, fmt.Errorf("invalid media ID: %w", err)
+	}
+
+	// Get existing media to preserve fields not in request
+	existingMedia, err := s.mediaRepo.GetByID(ctx, mediaID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get existing media: %w", err)
+	}
+
+	// Update fields from request
+	if req.Type != nil {
+		existingMedia.Type = *req.Type
+	}
+	if req.Title != nil {
+		existingMedia.Title = *req.Title
+	}
+	if req.OriginalTitle != nil {
+		existingMedia.OriginalTitle = req.OriginalTitle
+	}
+	if req.Year != nil {
+		existingMedia.Year = req.Year
+	}
+	if req.CoverURL != nil {
+		existingMedia.CoverURL = req.CoverURL
+	}
+	if req.Creators != nil {
+		existingMedia.Creators = req.Creators
+	}
+	if req.Genres != nil {
+		existingMedia.Genres = req.Genres
+	}
+	if req.Duration != nil {
+		existingMedia.Duration = req.Duration
+	}
+	if req.Metadata != nil {
+		existingMedia.Metadata = req.Metadata
+	}
+
+	return s.mediaRepo.Update(ctx, existingMedia)
+}
+
 func (s *MediaService) Search(ctx context.Context, query string, mediaType *models.MediaType) ([]*models.MediaItem, error) {
 	return s.mediaRepo.Search(ctx, query, mediaType)
 }
@@ -114,6 +159,18 @@ func (s *EntryService) Create(ctx context.Context, userID uuid.UUID, req *models
 	media, err := s.mediaRepo.GetByID(ctx, req.MediaID)
 	if err != nil {
 		return nil, err
+	}
+
+	// Check if entry already exists for this user and media
+	existingEntries, err := s.entryRepo.ListByUserAndMedia(ctx, userID, req.MediaID)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(existingEntries) > 0 {
+		// Update existing entry instead of creating new one
+		existingEntry := existingEntries[0]
+		return s.Update(ctx, existingEntry.ID, req)
 	}
 
 	entry := &models.Entry{
@@ -139,6 +196,10 @@ func (s *EntryService) Create(ctx context.Context, userID uuid.UUID, req *models
 
 func (s *EntryService) List(ctx context.Context, userID uuid.UUID, status *models.Status, mediaType *models.MediaType) ([]*models.Entry, error) {
 	return s.entryRepo.ListByUser(ctx, userID, status, mediaType)
+}
+
+func (s *EntryService) ListByUserAndMedia(ctx context.Context, userID uuid.UUID, mediaID uuid.UUID) ([]*models.Entry, error) {
+	return s.entryRepo.ListByUserAndMedia(ctx, userID, mediaID)
 }
 
 func (s *EntryService) Get(ctx context.Context, id uuid.UUID) (*models.Entry, error) {
@@ -193,11 +254,117 @@ func (s *CollectionService) Create(ctx context.Context, userID uuid.UUID, req *m
 		return nil, err
 	}
 
+	// Add entries to collection if provided
+	if len(req.EntryIDs) > 0 {
+		if err := s.collectionRepo.AddEntries(ctx, collection.ID, req.EntryIDs); err != nil {
+			// If adding entries fails, we should probably clean up the collection
+			// For now, just log the error and continue
+			fmt.Printf("Warning: Failed to add entries to collection: %v\n", err)
+		}
+	}
+
+	return collection, nil
+}
+
+func (s *CollectionService) List(ctx context.Context, userID uuid.UUID) ([]*models.Collection, error) {
+	collections, err := s.collectionRepo.ListByUser(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Load entries for each collection
+	for _, collection := range collections {
+		entries, err := s.collectionRepo.GetEntries(ctx, collection.ID)
+		if err != nil {
+			// If we can't load entries, set empty array
+			fmt.Printf("Warning: Failed to load entries for collection %s: %v\n", collection.ID, err)
+			collection.Entries = []models.Entry{}
+		} else {
+			// Convert []*models.Entry to []models.Entry
+			collection.Entries = make([]models.Entry, len(entries))
+			for i, entry := range entries {
+				collection.Entries[i] = *entry
+			}
+		}
+	}
+
+	return collections, nil
+}
+
+func (s *CollectionService) Update(ctx context.Context, id uuid.UUID, userID uuid.UUID, req *models.CreateCollectionRequest) (*models.Collection, error) {
+	// Get existing collection
+	collection, err := s.collectionRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	// Check if user owns the collection
+	if collection.UserID != userID {
+		return nil, fmt.Errorf("unauthorized: user does not own this collection")
+	}
+
+	// Update collection fields
+	collection.Title = req.Title
+	collection.IsPublic = req.IsPublic
+
+	// Update in database
+	if err := s.collectionRepo.Update(ctx, collection); err != nil {
+		return nil, err
+	}
+
+	// Update entries in collection
+	// Remove all existing entries
+	if err := s.collectionRepo.RemoveEntries(ctx, id); err != nil {
+		fmt.Printf("Warning: Failed to remove existing entries: %v\n", err)
+	}
+
+	// Add new entries
+	if len(req.EntryIDs) > 0 {
+		if err := s.collectionRepo.AddEntries(ctx, id, req.EntryIDs); err != nil {
+			fmt.Printf("Warning: Failed to add entries to collection: %v\n", err)
+		}
+	}
+
 	return collection, nil
 }
 
 func (s *CollectionService) Get(ctx context.Context, id uuid.UUID) (*models.Collection, error) {
-	return s.collectionRepo.GetByID(ctx, id)
+	collection, err := s.collectionRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	// Load entries for the collection
+	entries, err := s.collectionRepo.GetEntries(ctx, id)
+	if err != nil {
+		// If we can't load entries, return collection without entries
+		fmt.Printf("Warning: Failed to load entries for collection: %v\n", err)
+		collection.Entries = []models.Entry{}
+	} else {
+		// Convert []*models.Entry to []models.Entry
+		collection.Entries = make([]models.Entry, len(entries))
+		for i, entry := range entries {
+			collection.Entries[i] = *entry
+		}
+	}
+
+	return collection, nil
+}
+
+func (s *CollectionService) Delete(ctx context.Context, id uuid.UUID, userID uuid.UUID) error {
+	// Get existing collection to check ownership
+	collection, err := s.collectionRepo.GetByID(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	// Check if user owns the collection
+	if collection.UserID != userID {
+		return fmt.Errorf("unauthorized: user does not own this collection")
+	}
+
+	// Delete the collection (cascade will handle collection_entries)
+	return s.collectionRepo.Delete(ctx, id)
 }
 
 // ShareService
@@ -213,7 +380,7 @@ func NewShareService(shareRepo *repository.ShareRepository, collectionRepo *repo
 
 func (s *ShareService) CreateShareToken(ctx context.Context, kind string, targetID uuid.UUID) (*models.ShareToken, error) {
 	token := generateToken()
-	
+
 	share := &models.ShareToken{
 		Token:     token,
 		Kind:      kind,
@@ -237,10 +404,26 @@ func (s *ShareService) GetPublicShare(ctx context.Context, token string) (interf
 
 	switch share.Kind {
 	case "collection":
-		return s.collectionRepo.GetByID(ctx, share.TargetID)
+		fmt.Printf("DEBUG: Getting collection with ID: %s\n", share.TargetID)
+		collection, err := s.collectionRepo.GetByIDWithEntries(ctx, share.TargetID)
+		if err != nil {
+			fmt.Printf("DEBUG: Error getting collection: %v\n", err)
+			return nil, err
+		}
+		fmt.Printf("DEBUG: Collection has %d entries\n", len(collection.Entries))
+		return collection, nil
 	case "profile":
 		// Return user's entries
-		return s.entryRepo.ListByUser(ctx, share.TargetID, nil, nil)
+		entries, err := s.entryRepo.ListByUser(ctx, share.TargetID, nil, nil)
+		if err != nil {
+			return nil, err
+		}
+		// Convert []*models.Entry to []models.Entry
+		result := make([]models.Entry, len(entries))
+		for i, entry := range entries {
+			result[i] = *entry
+		}
+		return result, nil
 	default:
 		return nil, errors.New("unknown share kind")
 	}
@@ -260,7 +443,7 @@ func NewGuestService(entryRepo *repository.EntryRepository, mediaRepo *repositor
 func (s *GuestService) CreateSnapshot(ctx context.Context, req *models.GuestSnapshotRequest) (*models.ShareToken, error) {
 	// Create snapshot ID
 	snapshotID := uuid.New()
-	
+
 	// Create share token for snapshot
 	share := &models.ShareToken{
 		Token:     generateToken(),
