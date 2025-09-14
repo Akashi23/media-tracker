@@ -5,12 +5,14 @@ A Go backend for the Media Tracker application that allows users to track their 
 ## Features
 
 - **Authentication**: JWT-based authentication with email login
-- **Media Management**: Create and search media items
-- **Entry Tracking**: Track your progress, ratings, and reviews
-- **Collections**: Create and share collections
-- **Guest Mode**: Use without registration, data stored locally
-- **Sharing**: Share collections and profiles via public links
-- **Data Migration**: Merge guest data into registered accounts
+- **Media Management**: Create and search media items with external API integration
+- **Entry Tracking**: Track your progress, ratings, and reviews with status management
+- **Collections**: Create, manage, and share collections with public links
+- **Guest Mode**: Use without registration, data stored locally with snapshot/merge
+- **Sharing**: Share collections and profiles via public links with token-based access
+- **Data Migration**: Merge guest data into registered accounts seamlessly
+- **Real-time Sync**: Automatic synchronization of entries and collections
+- **Search**: Advanced search across all media types with filtering
 
 ## Tech Stack
 
@@ -65,6 +67,7 @@ The server will start on `http://localhost:8080`
 
 ### Media
 - `POST /api/media` - Create media item
+- `PUT /api/media/:id` - Update media item
 - `GET /api/media/search?q=query&type=movie` - Search media
 
 ### Entries
@@ -73,6 +76,7 @@ The server will start on `http://localhost:8080`
 - `GET /api/entries/:id` - Get entry
 - `PATCH /api/entries/:id` - Update entry
 - `DELETE /api/entries/:id` - Delete entry
+- `POST /api/entries/sync` - Sync entries
 
 ### Collections
 - `GET /api/collections` - List collections

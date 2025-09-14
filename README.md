@@ -1,6 +1,6 @@
 # Media Tracker
 
-A comprehensive media tracking application where users can track their consumption of movies, books, anime, games, TV shows, and videos. Features include progress tracking, ratings, reviews, collections, and sharing capabilities.
+A comprehensive media tracking application where users can track their consumption of movies, books, anime, games, TV shows, and videos. Features include progress tracking, ratings, reviews, collections, sharing capabilities, and guest mode for immediate use without registration.
 
 ## 🚀 Quick Start with Docker
 
@@ -50,7 +50,16 @@ media-tracker/
 │   ├── Dockerfile         # Production Dockerfile
 │   ├── Dockerfile.dev     # Development Dockerfile
 │   └── .air.toml         # Hot reload configuration
-├── front/                  # Frontend (to be implemented)
+├── front/                  # SvelteKit frontend
+│   ├── src/
+│   │   ├── lib/
+│   │   │   ├── components/  # UI components
+│   │   │   ├── stores/      # State management
+│   │   │   ├── types/       # TypeScript types
+│   │   │   └── utils/       # Utilities
+│   │   └── routes/          # SvelteKit routes
+│   ├── static/              # Static assets
+│   └── package.json
 ├── migrations/             # Database migrations
 ├── scripts/                # Utility scripts
 ├── .github/workflows/      # CI/CD workflows
@@ -111,9 +120,34 @@ cd scripts && go run add_default_user.go
 | Service | Port | Description |
 |---------|------|-------------|
 | Backend API | 8080 | Go REST API |
+| Frontend | 3000 | SvelteKit web interface |
 | PostgreSQL | 5432 | Database |
 | Redis | 6379 | Cache |
-| Frontend | 3000 | Web interface (placeholder) |
+
+## ✨ Features
+
+### 🎯 Core Functionality
+- **Media Tracking**: Track movies, books, anime, games, TV shows, and videos
+- **Progress Management**: Set status (planned, in progress, completed, on hold, dropped)
+- **Rating System**: Rate media with 1-10 scale
+- **Review System**: Write detailed reviews with Markdown support
+- **Collections**: Organize entries into custom collections
+- **Search**: Real-time search across all media types
+
+### 👤 User Experience
+- **Guest Mode**: Use immediately without registration
+- **Data Migration**: Seamlessly merge guest data into registered accounts
+- **Public Sharing**: Share collections and profiles via public links
+- **Responsive Design**: Works on desktop, tablet, and mobile
+- **Dark/Light Theme**: User preference support
+
+### 🔧 Technical Features
+- **Real-time Sync**: Automatic data synchronization
+- **Offline Support**: Guest mode works without internet
+- **Export/Import**: JSON data export and import
+- **RESTful API**: Clean, documented API endpoints
+- **JWT Authentication**: Secure token-based auth
+- **Database Migrations**: Versioned schema updates
 
 ## 📚 API Documentation
 
@@ -128,11 +162,17 @@ cd scripts && go run add_default_user.go
 ### Entries
 - `GET /api/entries` - List user entries
 - `POST /api/entries` - Create entry
+- `GET /api/entries/:id` - Get entry
 - `PATCH /api/entries/:id` - Update entry
 - `DELETE /api/entries/:id` - Delete entry
+- `POST /api/entries/sync` - Sync entries
 
 ### Collections
+- `GET /api/collections` - List collections
 - `POST /api/collections` - Create collection
+- `GET /api/collections/:id` - Get collection
+- `PATCH /api/collections/:id` - Update collection
+- `DELETE /api/collections/:id` - Delete collection
 - `POST /api/collections/:id/share` - Create share link
 
 ### Guest Mode
